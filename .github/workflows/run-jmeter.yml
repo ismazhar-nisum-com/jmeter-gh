@@ -21,66 +21,63 @@ jobs:
         java-version: '17'
 
     # --- JMETER INSTALLATION ---
-    - name: Setup JMeter
+    - name: Install JMeter with plugins
       run: |
         JMETER_VERSION="5.6.2"
         JMETER_DIR="apache-jmeter-${JMETER_VERSION}"
+        
+        # Clean install
         rm -rf ${JMETER_DIR} apache-jmeter-*.tgz
+        
+        # Download and extract
         wget -q https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-${JMETER_VERSION}.tgz
         tar -xzf apache-jmeter-${JMETER_VERSION}.tgz
+        
+        # Install plugins manager
+        wget -q https://repo1.maven.org/maven2/kg/apc/jmeter-plugins-manager/1.7/jmeter-plugins-manager-1.7.jar \
+          -O ${JMETER_DIR}/lib/ext/jmeter-plugins-manager-1.7.jar
+        
+        # Set paths
         echo "JMETER_HOME=${GITHUB_WORKSPACE}/${JMETER_DIR}" >> $GITHUB_ENV
+        echo "PATH=${GITHUB_WORKSPACE}/${JMETER_DIR}/bin:$PATH" >> $GITHUB_ENV
 
-    # --- CLEAN & PREPARE ---
-    - name: Prepare output directory
+    # --- PREPARE ENVIRONMENT ---
+    - name: Configure JMeter
       run: |
-        rm -rf ./jmeter-results
+        # Disable plugin scanning warnings
+        echo "jmeterplugin.skip_package_scan=true" >> $JMETER_HOME/bin/jmeter.properties
+        
+        # Create output directories
         mkdir -p ./jmeter-results/{html,csv,json,xml,junit}
-        echo "Created output directories"
 
     # --- TEST EXECUTION ---
-    - name: Run JMeter with multiple reporters
+    - name: Run JMeter tests
       run: |
-        $JMETER_HOME/bin/jmeter -n -t ./jmeter/test.jmx \
-          -l ./jmeter-results/results.jtl \          # Default JTL format
-          -e -o ./jmeter-results/html \              # HTML dashboard
-          -Jjmeter.save.saveservice.output_format=xml \  # XML format
-          -Jjmeter.save.saveservice.print_field_names=true
-
-        # Generate CSV report from JTL
-        $JMETER_HOME/bin/JMeterPluginsCMD.sh \
-          --tool Reporter \
-          --input-jtl ./jmeter-results/results.jtl \
-          --plugin-type AggregateReport \
-          --generate-csv ./jmeter-results/csv/aggregate.csv
-
-        # Generate JSON report
-        $JMETER_HOME/bin/JMeterPluginsCMD.sh \
-          --tool Reporter \
-          --input-jtl ./jmeter-results/results.jtl \
-          --plugin-type AggregateReport \
-          --generate-json ./jmeter-results/json/aggregate.json
-
-        # Generate JUnit-style XML
-        $JMETER_HOME/bin/JMeterPluginsCMD.sh \
-          --tool Reporter \
-          --input-jtl ./jmeter-results/results.jtl \
-          --plugin-type JMeterPluginsCMD.JUnitReporter \
-          --generate-xml ./jmeter-results/junit/results.xml
-
-    # --- VALIDATION ---
-    - name: Verify reports
-      run: |
-        echo "Generated reports:"
-        find ./jmeter-results -type f
+        # Single-line command execution
+        $JMETER_HOME/bin/jmeter -n -t ./jmeter/test.jmx -l ./jmeter-results/results.jtl -e -o ./jmeter-results/html
         
-        # Check each report type
-        for fmt in jtl csv json xml html junit; do
-          count=$(find ./jmeter-results/$fmt -type f | wc -l)
-          [ $count -eq 0 ] && echo "::warning::No $fmt reports generated"
-        done
+        # Generate additional reports if JTL exists
+        if [ -s "./jmeter-results/results.jtl" ]; then
+          # CSV report
+          java -jar $JMETER_HOME/lib/cmdrunner-2.2.jar \
+            --tool Reporter \
+            --input-jtl ./jmeter-results/results.jtl \
+            --plugin-type AggregateReport \
+            --generate-csv ./jmeter-results/csv/aggregate.csv
+            
+          # JSON report
+          java -jar $JMETER_HOME/lib/cmdrunner-2.2.jar \
+            --tool Reporter \
+            --input-jtl ./jmeter-results/results.jtl \
+            --plugin-type AggregateReport \
+            --generate-json ./jmeter-results/json/aggregate.json
+        else
+          echo "::error::No JTL results file generated"
+          exit 1
+        fi
 
     # --- ARTIFACT UPLOAD ---
-    - name: Upload all reports
+    - name: Upload reports
       uses: actions/upload-artifact@v4
       with:
         name: jmeter-reports-${{ github.run_number }}
@@ -89,6 +86,4 @@ jobs:
           jmeter-results/html/**
           jmeter-results/csv/**
           jmeter-results/json/**
-          jmeter-results/xml/**
-          jmeter-results/junit/**
-        if-no-files-found: warn
+        if-no-files-found: error
