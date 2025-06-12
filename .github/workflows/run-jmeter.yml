@@ -31,6 +31,12 @@ jobs:
         mkdir -p jmeter-results
         $JMETER_HOME/bin/jmeter -n -t ./jmeter/test.jmx -l jmeter-results/results.jtl -e -o jmeter-results/html-report
 
+
+    - name: Zip HTML Report
+  	run: |
+  	cd jmeter-results
+   	zip -r jmeter-html-report.zip html-report
+
     - name: Upload JMeter Results (JTL + HTML Report)
       uses: actions/upload-artifact@v4
       with:
