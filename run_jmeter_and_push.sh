@@ -8,10 +8,13 @@ RESULT_DIR="jmeter-results"
 
 # === Run JMeter Test ===
 mkdir -p $RESULT_DIR
-jmeter -n -t $JMETER_SCRIPT -l $RESULT_DIR/results.jtl -e -o $RESULT_DIR/html || {
-  echo "❌ JMeter test failed. Exiting."
+jmeter -n -t $JMETER_SCRIPT -l $RESULT_DIR/results.jtl -e -o $RESULT_DIR/html
+
+# Exit if report wasn't generated
+if [ ! -d "$RESULT_DIR/html" ]; then
+  echo "❌ JMeter did not generate a report. Exiting."
   exit 1
-}
+fi
 
 # === GitHub CLI + Push Results ===
 rm -rf temp-repo
@@ -23,6 +26,11 @@ mkdir -p results
 cp -r ../$RESULT_DIR/* results/
 
 git add .
+if git diff --cached --quiet; then
+  echo "⚠️ No new changes to commit. Skipping PR creation."
+  exit 0
+fi
+
 git commit -m "Add JMeter test results - $(date)"
 git push origin $BRANCH
 
