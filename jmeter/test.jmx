@@ -75,7 +75,7 @@
           </ResponseAssertion>
           <hashTree/>
           <CSVDataSet guiclass="TestBeanGUI" testclass="CSVDataSet" testname="UpdateEmail" enabled="true">
-            <stringProp name="filename">jmeter/customer-emails.csv</stringProp>
+            <stringProp name="filename">jmeter/data/CustomerEmails.csv</stringProp>
             <stringProp name="fileEncoding"></stringProp>
             <stringProp name="variableNames">email</stringProp>
             <boolProp name="ignoreFirstLine">true</boolProp>
