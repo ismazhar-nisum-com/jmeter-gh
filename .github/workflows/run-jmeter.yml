@@ -26,41 +26,14 @@ jobs:
         tar -xzf apache-jmeter-5.6.2.tgz
         echo "JMETER_HOME=$PWD/apache-jmeter-5.6.2" >> $GITHUB_ENV
 
-    - name: Run JMeter Test Plan
+    - name: Run JMeter Test
       run: |
         mkdir -p jmeter-results
-        $JMETER_HOME/bin/jmeter -n -t ./jmeter/test.jmx \
-          -l jmeter-results/results.jtl \
-          -e -o jmeter-results/html-report
-
-    - name: Generate Pass/Fail Summary
-      run: |
-        echo "✅ Generating JMeter summary..."
-        total_samples=$(grep -c "<httpSample" jmeter-results/results.jtl)
-
-        if [ "$total_samples" -eq 0 ]; then
-          echo "❌ No samples found in results.jtl" > jmeter-results/summary.txt
-        else
-          avg_time=$(grep "<httpSample" jmeter-results/results.jtl | \
-            awk -F 't="' '{print $2}' | awk -F '"' '{print $1}' | \
-            awk '{s+=$1} END {if (NR>0) print s/NR; else print 0}')
-
-          passed=$(grep -c 's="true"' jmeter-results/results.jtl)
-          failed=$(grep -c 's="false"' jmeter-results/results.jtl)
-
-          echo "Average Response Time (ms): $avg_time" > jmeter-results/summary.txt
-          echo "Total Passed Samples: $passed" >> jmeter-results/summary.txt
-          echo "Total Failed Samples: $failed" >> jmeter-results/summary.txt
-        fi
-
-        echo "✅ Summary:"
-        cat jmeter-results/summary.txt
-
-
-    - name: Zip HTML Report
-      run: |
-        cd jmeter-results
-        zip -r jmeter-html-report.zip html-report
+        REPORT_DIR="jmeter-results/html-report-$(date +%Y%m%d-%H%M%S)"
+        rm -rf "$REPORT_DIR" # ✅ Ensure the folder does not exist
+        echo "REPORT_DIR=$REPORT_DIR" >> $GITHUB_ENV
+        $JMETER_HOME/bin/jmeter -n -t Jenkins_Testplan.jmx -l jmeter-results/results.jtl -e -o "$REPORT_DIR"
+    
 
     - name: Upload Artifacts (JTL + Summary + HTML Report ZIP)
       uses: actions/upload-artifact@v4
