@@ -25,14 +25,14 @@ jobs:
         wget https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.6.2.tgz
         tar -xzf apache-jmeter-5.6.2.tgz
         echo "JMETER_HOME=$PWD/apache-jmeter-5.6.2" >> $GITHUB_ENV
-
     - name: Run JMeter Test
       run: |
         mkdir -p jmeter-results
         REPORT_DIR="jmeter-results/html-report-$(date +%Y%m%d-%H%M%S)"
-        rm -rf "$REPORT_DIR" # ✅ Ensure the folder does not exist
+        rm -rf "$REPORT_DIR" # ✅ Ensure output folder is clean
         echo "REPORT_DIR=$REPORT_DIR" >> $GITHUB_ENV
-        $JMETER_HOME/bin/jmeter -n -t test.jmx -l jmeter-results/results.jtl -e -o "$REPORT_DIR"
+        $JMETER_HOME/bin/jmeter -n -t jmeter/test.jmx -l jmeter-results/results.jtl -e -o "$REPORT_DIR"
+
     
 
     - name: Upload Artifacts (JTL + Summary + HTML Report ZIP)
