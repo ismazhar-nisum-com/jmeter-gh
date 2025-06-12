@@ -29,9 +29,30 @@ jobs:
       run: |
         mkdir -p jmeter-results
         REPORT_DIR="jmeter-results/html-report-$(date +%Y%m%d-%H%M%S)"
-        rm -rf "$REPORT_DIR" # ✅ Ensure output folder is clean
+        rm -rf "$REPORT_DIR"
         echo "REPORT_DIR=$REPORT_DIR" >> $GITHUB_ENV
+    
+        echo "🚀 Running JMeter Test Plan..."
         $JMETER_HOME/bin/jmeter -n -t jmeter/test.jmx -l jmeter-results/results.jtl -e -o "$REPORT_DIR"
+    
+        echo "📊 Test summary:"
+        TOTAL=$(grep -c "" jmeter-results/results.jtl)
+        FAILS=$(grep -c ",false" jmeter-results/results.jtl || true)
+        echo "Total samples: $TOTAL"
+        echo "Failures: $FAILS"
+    
+        if [ "$FAILS" -gt 0 ]; then
+          echo "❌ One or more requests failed. Failing the workflow."
+          grep ",false" jmeter-results/results.jtl
+          exit 1
+        else
+          echo "✅ All JMeter requests passed."
+        fi
+      
+    - name: Zip HTML Report
+      run: |
+          zip -r jmeter-results/jmeter-html-report.zip "$REPORT_DIR"
+
 
     
 
