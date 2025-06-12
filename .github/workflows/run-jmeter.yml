@@ -36,9 +36,22 @@ jobs:
           -l jmeter-results/results.jtl \
           -e -o "$REPORT_DIR"
 
-    - name: Zip HTML Report
+    - name: Check Report Directory Exists
       run: |
-        zip -r jmeter-results/jmeter-html-report.zip "$REPORT_DIR"
+        echo "REPORT_DIR=$REPORT_DIR"
+        ls -lah "$REPORT_DIR" || echo "Directory $REPORT_DIR does not exist!"
+
+    - name: Zip HTML Report if Exists
+      if: success()
+      run: |
+        if [ -d "$REPORT_DIR" ]; then
+          zip -r jmeter-results/jmeter-html-report.zip "$REPORT_DIR"
+        else
+          echo "⚠️ Report directory not found: $REPORT_DIR"
+          mkdir -p jmeter-results
+          echo "Report directory not generated. Skipping zip." > jmeter-results/NO_REPORT.txt
+        fi
+
 
     - name: Upload Artifacts (JTL + HTML Report ZIP)
       uses: actions/upload-artifact@v4
