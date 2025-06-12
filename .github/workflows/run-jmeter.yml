@@ -36,18 +36,26 @@ jobs:
     - name: Generate Pass/Fail Summary
       run: |
         echo "✅ Generating JMeter summary..."
-        grep "<httpSample" jmeter-results/results.jtl | \
-        awk -F 's="' '{print $2}' | awk -F '"' '{print $1}' | \
-        awk '{s+=$1; c++} END {print "Average Response Time (ms):", s/c}' >> jmeter-results/summary.txt
+        total_samples=$(grep -c "<httpSample" jmeter-results/results.jtl)
 
-        passed=$(grep -c 's="true"' jmeter-results/results.jtl)
-        failed=$(grep -c 's="false"' jmeter-results/results.jtl)
+        if [ "$total_samples" -eq 0 ]; then
+          echo "❌ No samples found in results.jtl" > jmeter-results/summary.txt
+        else
+          avg_time=$(grep "<httpSample" jmeter-results/results.jtl | \
+            awk -F 't="' '{print $2}' | awk -F '"' '{print $1}' | \
+            awk '{s+=$1} END {if (NR>0) print s/NR; else print 0}')
 
-        echo "Total Passed Samples: $passed" >> jmeter-results/summary.txt
-        echo "Total Failed Samples: $failed" >> jmeter-results/summary.txt
+          passed=$(grep -c 's="true"' jmeter-results/results.jtl)
+          failed=$(grep -c 's="false"' jmeter-results/results.jtl)
+
+          echo "Average Response Time (ms): $avg_time" > jmeter-results/summary.txt
+          echo "Total Passed Samples: $passed" >> jmeter-results/summary.txt
+          echo "Total Failed Samples: $failed" >> jmeter-results/summary.txt
+        fi
 
         echo "✅ Summary:"
         cat jmeter-results/summary.txt
+
 
     - name: Zip HTML Report
       run: |
