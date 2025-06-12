@@ -21,59 +21,54 @@ jobs:
         java-version: '17'
 
     # --- JMETER INSTALLATION ---
-    - name: Download JMeter
-      id: download-jmeter
+    - name: Setup JMeter
       run: |
         JMETER_VERSION="5.6.2"
         JMETER_DIR="apache-jmeter-${JMETER_VERSION}"
         
-        # Download and extract
+        # Clean previous installation if exists
+        rm -rf ${JMETER_DIR} apache-jmeter-*.tgz
+        
+        # Download and extract fresh copy
         wget -q https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-${JMETER_VERSION}.tgz
         tar -xzf apache-jmeter-${JMETER_VERSION}.tgz
         
-        # Set absolute path
-        JMETER_PATH="$GITHUB_WORKSPACE/${JMETER_DIR}"
-        echo "JMETER_HOME=${JMETER_PATH}" >> $GITHUB_ENV
-        echo "PATH=${JMETER_PATH}/bin:$PATH" >> $GITHUB_ENV
-        
-        # Verify extraction
-        echo "JMeter extracted to: ${JMETER_PATH}"
-        ls -la ${JMETER_PATH}/bin/jmeter
+        # Set paths
+        echo "JMETER_HOME=${GITHUB_WORKSPACE}/${JMETER_DIR}" >> $GITHUB_ENV
+        echo "PATH=${GITHUB_WORKSPACE}/${JMETER_DIR}/bin:$PATH" >> $GITHUB_ENV
 
-    # --- VERIFICATION ---
-    - name: Verify installation
+    # --- CLEAN PREVIOUS RESULTS ---
+    - name: Clean previous results
       run: |
-        echo "Current directory: $(pwd)"
-        echo "JMETER_HOME: $JMETER_HOME"
-        echo "PATH: $PATH"
-        
-        # Full validation
-        ls -la $JMETER_HOME/bin/
-        $JMETER_HOME/bin/jmeter --version
-        echo "JMeter verification successful"
+        rm -rf ./jmeter-results
+        mkdir -p ./jmeter-results/html-report
+        echo "Cleaned previous test results"
 
     # --- TEST EXECUTION ---
     - name: Run JMeter test
       run: |
-        mkdir -p ./jmeter-results
-        echo "Running test from: $(pwd)"
-        echo "Using JMeter at: $JMETER_HOME/bin/jmeter"
-        
+        echo "Running test with fresh output files..."
         $JMETER_HOME/bin/jmeter -n -t ./jmeter/test.jmx \
           -l ./jmeter-results/results.jtl \
           -e -o ./jmeter-results/html-report
+        
+        # Validate results
+        if [ ! -s "./jmeter-results/results.jtl" ]; then
+          echo "::error::Test failed - empty results.jtl"
+          echo "Possible causes:"
+          echo "1. Test plan contains no valid requests"
+          echo "2. All requests failed"
+          echo "3. File permission issues"
+          echo "Directory contents:"
+          ls -la ./jmeter-results/
+          exit 1
+        fi
 
     # --- ARTIFACT HANDLING ---
-    - name: Package results
-      run: |
-        cd jmeter-results
-        zip -r report.zip html-report/ || echo "No HTML report to package"
-
-    - name: Upload artifacts
+    - name: Package and upload results
       uses: actions/upload-artifact@v4
       with:
-        name: jmeter-results
+        name: jmeter-results-${{ github.run_number }}
         path: |
           jmeter-results/results.jtl
-          jmeter-results/report.zip
-        if-no-files-found: warn
+          jmeter-results/html-report
