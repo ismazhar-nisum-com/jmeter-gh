@@ -21,7 +21,8 @@ jobs:
         java-version: '17'
 
     # --- JMETER INSTALLATION ---
-    - name: Install JMeter with plugins
+    - name: Install JMeter
+      id: install-jmeter
       run: |
         JMETER_VERSION="5.6.2"
         JMETER_DIR="apache-jmeter-${JMETER_VERSION}"
@@ -33,71 +34,98 @@ jobs:
         wget -q https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-${JMETER_VERSION}.tgz
         tar -xzf apache-jmeter-${JMETER_VERSION}.tgz
         
-        # Download cmdrunner separately (as it's often missing)
-        wget -q https://repo1.maven.org/maven2/kg/apc/cmdrunner/2.2/cmdrunner-2.2.jar \
-          -O ${JMETER_DIR}/lib/cmdrunner-2.2.jar
-        
-        # Install plugins manager
-        wget -q https://repo1.maven.org/maven2/kg/apc/jmeter-plugins-manager/1.7/jmeter-plugins-manager-1.7.jar \
-          -O ${JMETER_DIR}/lib/ext/jmeter-plugins-manager-1.7.jar
+        # Verify extraction
+        if [ ! -d "${JMETER_DIR}" ]; then
+          echo "::error::JMeter extraction failed"
+          exit 1
+        fi
         
         # Set paths
         echo "JMETER_HOME=${GITHUB_WORKSPACE}/${JMETER_DIR}" >> $GITHUB_ENV
         echo "PATH=${GITHUB_WORKSPACE}/${JMETER_DIR}/bin:$PATH" >> $GITHUB_ENV
+        echo "JMETER_DIR=${JMETER_DIR}" >> $GITHUB_ENV
 
-    # --- CONFIGURE JMETER ---
-    - name: Configure JMeter
+    # --- PLUGIN INSTALLATION ---
+    - name: Install Required Plugins
       run: |
-        # Disable plugin scanning warnings
-        echo "jmeterplugin.skip_package_scan=true" >> $JMETER_HOME/bin/jmeter.properties
+        # Create lib/ext if missing
+        mkdir -p $JMETER_HOME/lib/ext
         
-        # Install required plugins
-        java -jar $JMETER_HOME/lib/jmeter-plugins-manager-1.7.jar \
-          install jpgc-cmd=2.2,jpgc-synthesis=2.2
+        # Download plugins manager
+        PLUGINS_MANAGER_URL="https://repo1.maven.org/maven2/kg/apc/jmeter-plugins-manager/1.7/jmeter-plugins-manager-1.7.jar"
+        wget -q $PLUGINS_MANAGER_URL -O $JMETER_HOME/lib/ext/jmeter-plugins-manager-1.7.jar
         
-        # Create output directories
-        mkdir -p ./jmeter-results/{html,csv,json}
-
-    # --- TEST EXECUTION ---
-    - name: Run JMeter tests
-      run: |
-        # First run to generate JTL (without HTML report)
-        $JMETER_HOME/bin/jmeter -n -t ./jmeter/test.jmx -l ./jmeter-results/results.jtl
+        # Download cmdrunner
+        CMDRUNNER_URL="https://repo1.maven.org/maven2/kg/apc/cmdrunner/2.2/cmdrunner-2.2.jar"
+        wget -q $CMDRUNNER_URL -O $JMETER_HOME/lib/cmdrunner-2.2.jar
         
-        # Verify test executed successfully
-        if [ ! -s "./jmeter-results/results.jtl" ]; then
-          echo "::error::Test failed - no results generated"
+        # Verify downloads
+        if [ ! -f "$JMETER_HOME/lib/ext/jmeter-plugins-manager-1.7.jar" ]; then
+          echo "::error::Failed to download plugins manager"
           exit 1
         fi
         
-        # Generate HTML report separately
-        $JMETER_HOME/bin/jmeter -g ./jmeter-results/results.jtl -o ./jmeter-results/html
+        if [ ! -f "$JMETER_HOME/lib/cmdrunner-2.2.jar" ]; then
+          echo "::error::Failed to download cmdrunner"
+          exit 1
+        fi
 
-    # --- GENERATE ADDITIONAL REPORTS ---
-    - name: Generate CSV and JSON reports
+    # --- PLUGIN CONFIGURATION ---
+    - name: Configure Plugins
       run: |
-        # CSV report
-        java -jar $JMETER_HOME/lib/cmdrunner-2.2.jar \
-          --tool Reporter \
-          --input-jtl ./jmeter-results/results.jtl \
-          --plugin-type AggregateReport \
-          --generate-csv ./jmeter-results/csv/aggregate.csv
+        # Install basic plugins
+        java -jar $JMETER_HOME/lib/ext/jmeter-plugins-manager-1.7.jar \
+          install jpgc-cmd=2.2,jpgc-synthesis=2.2
         
-        # JSON report
+        # Disable plugin scanning warnings
+        echo "jmeterplugin.skip_package_scan=true" >> $JMETER_HOME/bin/jmeter.properties
+        echo "search_paths=" >> $JMETER_HOME/bin/jmeter.properties
+
+    # --- TEST EXECUTION ---
+    - name: Run JMeter Test
+      run: |
+        # Create output directory
+        mkdir -p ./jmeter-results
+        
+        # Run test (without HTML report first)
+        $JMETER_HOME/bin/jmeter -n -t ./jmeter/test.jmx -l ./jmeter-results/results.jtl
+        
+        # Verify test execution
+        if [ ! -s "./jmeter-results/results.jtl" ]; then
+          echo "::error::Test failed - empty results.jtl"
+          echo "Directory contents:"
+          ls -la ./jmeter-results/
+          exit 1
+        fi
+
+    # --- REPORT GENERATION ---
+    - name: Generate Reports
+      run: |
+        # Generate HTML dashboard
+        $JMETER_HOME/bin/jmeter -g ./jmeter-results/results.jtl -o ./jmeter-results/html
+        
+        # Generate CSV report
         java -jar $JMETER_HOME/lib/cmdrunner-2.2.jar \
           --tool Reporter \
           --input-jtl ./jmeter-results/results.jtl \
           --plugin-type AggregateReport \
-          --generate-json ./jmeter-results/json/aggregate.json
+          --generate-csv ./jmeter-results/aggregate.csv
+        
+        # Generate JSON report
+        java -jar $JMETER_HOME/lib/cmdrunner-2.2.jar \
+          --tool Reporter \
+          --input-jtl ./jmeter-results/results.jtl \
+          --plugin-type AggregateReport \
+          --generate-json ./jmeter-results/aggregate.json
 
     # --- UPLOAD ARTIFACTS ---
-    - name: Upload reports
+    - name: Upload Results
       uses: actions/upload-artifact@v4
       with:
-        name: jmeter-reports-${{ github.run_number }}
+        name: jmeter-results-${{ github.run_number }}
         path: |
           jmeter-results/results.jtl
           jmeter-results/html/**
-          jmeter-results/csv/**
-          jmeter-results/json/**
+          jmeter-results/aggregate.csv
+          jmeter-results/aggregate.json
         if-no-files-found: error
