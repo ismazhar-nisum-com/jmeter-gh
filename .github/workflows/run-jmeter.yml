@@ -59,11 +59,14 @@ jobs:
         fi
 
     # --- ARTIFACT HANDLING ---
-    - name: Compress HTML report (if exists)
-      if: steps.jmeter-run.outcome == 'success' && files('jmeter-results/html-report/index.html')
+    - name: Compress HTML report
       run: |
-        cd jmeter-results
-        zip -r report.zip html-report/
+        if [ -d "jmeter-results/html-report" ]; then
+          cd jmeter-results
+          zip -r report.zip html-report/
+        else
+          echo "No HTML report directory found. Skipping compression."
+        fi
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
@@ -72,4 +75,4 @@ jobs:
         path: |
           jmeter-results/results.jtl
           jmeter-results/report.zip
-        if-no-files-found: error
+        if-no-files-found: warn
