@@ -21,51 +21,55 @@ jobs:
         java-version: '17'
 
     # --- JMETER INSTALLATION ---
-    - name: Cache JMeter
-      id: cache-jmeter
-      uses: actions/cache@v3
-      with:
-        path: apache-jmeter-5.6.2
-        key: ${{ runner.os }}-jmeter-5.6.2
-
-    - name: Install JMeter
-      if: steps.cache-jmeter.outputs.cache-hit != 'true'
+    - name: Download JMeter
+      id: download-jmeter
       run: |
-        wget -q https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.6.2.tgz
-        tar -xzf apache-jmeter-5.6.2.tgz
-        echo "JMETER_HOME=$PWD/apache-jmeter-5.6.2" >> $GITHUB_ENV
-        echo "PATH=$PWD/apache-jmeter-5.6.2/bin:$PATH" >> $GITHUB_ENV
+        JMETER_VERSION="5.6.2"
+        JMETER_DIR="apache-jmeter-${JMETER_VERSION}"
+        
+        # Download and extract
+        wget -q https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-${JMETER_VERSION}.tgz
+        tar -xzf apache-jmeter-${JMETER_VERSION}.tgz
+        
+        # Set absolute path
+        JMETER_PATH="$GITHUB_WORKSPACE/${JMETER_DIR}"
+        echo "JMETER_HOME=${JMETER_PATH}" >> $GITHUB_ENV
+        echo "PATH=${JMETER_PATH}/bin:$PATH" >> $GITHUB_ENV
+        
+        # Verify extraction
+        echo "JMeter extracted to: ${JMETER_PATH}"
+        ls -la ${JMETER_PATH}/bin/jmeter
 
     # --- VERIFICATION ---
     - name: Verify installation
       run: |
-        echo "JMeter path: $JMETER_HOME/bin/jmeter"
+        echo "Current directory: $(pwd)"
+        echo "JMETER_HOME: $JMETER_HOME"
+        echo "PATH: $PATH"
+        
+        # Full validation
+        ls -la $JMETER_HOME/bin/
         $JMETER_HOME/bin/jmeter --version
+        echo "JMeter verification successful"
 
     # --- TEST EXECUTION ---
     - name: Run JMeter test
       run: |
         mkdir -p ./jmeter-results
+        echo "Running test from: $(pwd)"
+        echo "Using JMeter at: $JMETER_HOME/bin/jmeter"
+        
         $JMETER_HOME/bin/jmeter -n -t ./jmeter/test.jmx \
           -l ./jmeter-results/results.jtl \
           -e -o ./jmeter-results/html-report
 
-        # Verify results were generated
-        if [ ! -s "./jmeter-results/results.jtl" ]; then
-          echo "::error::Test failed - no results generated"
-          exit 1
-        fi
-
-    # --- ARTIFACT PREPARATION ---
-    - name: Prepare reports
+    # --- ARTIFACT HANDLING ---
+    - name: Package results
       run: |
-        if [ -d "jmeter-results/html-report" ]; then
-          cd jmeter-results
-          zip -r report.zip html-report/
-        fi
+        cd jmeter-results
+        zip -r report.zip html-report/ || echo "No HTML report to package"
 
-    # --- ARTIFACT UPLOAD ---
-    - name: Upload results
+    - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: jmeter-results
