@@ -1,18 +1,18 @@
-name: Run JMeter Test
+name: JMeter Test Suite
 
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch:
+    branches: [ main ]
+  workflow_dispatch:  # Allows manual trigger
 
 jobs:
   jmeter-test:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+    # --- SETUP ---
+    - name: Checkout code
+      uses: actions/checkout@v4
 
     - name: Set up Java 17
       uses: actions/setup-java@v3
@@ -20,6 +20,7 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
+    # --- JMETER INSTALLATION (WITH CACHING) ---
     - name: Cache JMeter
       id: cache-jmeter
       uses: actions/cache@v3
@@ -27,33 +28,48 @@ jobs:
         path: apache-jmeter-5.6.2
         key: ${{ runner.os }}-jmeter-5.6.2
 
-    - name: Download Apache JMeter (if not cached)
+    - name: Install JMeter (if not cached)
       if: steps.cache-jmeter.outputs.cache-hit != 'true'
       run: |
         wget https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.6.2.tgz
         tar -xzf apache-jmeter-5.6.2.tgz
         echo "JMETER_HOME=$PWD/apache-jmeter-5.6.2" >> $GITHUB_ENV
 
-    - name: Run JMeter Test
+    # --- TEST EXECUTION WITH VALIDATION ---
+    - name: Run JMeter test
+      id: jmeter-run
       run: |
-        mkdir -p jmeter-results
-        # Force create output directory for HTML report
-        mkdir -p jmeter-results/html-report
-        $JMETER_HOME/bin/jmeter -n -t ./jmeter/test.jmx -l jmeter-results/results.jtl -e -o jmeter-results/html-report || echo "JMeter test completed (ignoring exit code)"
+        # Create output directories
+        mkdir -p ./jmeter-results/html-report
+        
+        # Run test with fail-safe (|| true prevents workflow failure)
+        $JMETER_HOME/bin/jmeter -n -t ./jmeter/test.jmx \
+          -l ./jmeter-results/results.jtl \
+          -e -o ./jmeter-results/html-report || echo "JMeter exited with error (ignored for artifacts)"
 
-    - name: Zip HTML Report (only if it exists)
-      run: |
-        if [ -d "jmeter-results/html-report" ]; then
-          cd jmeter-results
-          zip -r jmeter-html-report.zip html-report
-        else
-          echo "No HTML report directory found. Skipping zipping."
+        # Validate JTL file
+        if [ ! -s "./jmeter-results/results.jtl" ]; then
+          echo "::error::results.jtl is empty! Check test plan configuration."
+          exit 1
         fi
 
-    - name: Upload JMeter Results
+        # Validate HTML report
+        if [ ! -f "./jmeter-results/html-report/index.html" ]; then
+          echo "::warning::HTML report not generated!"
+        fi
+
+    # --- ARTIFACT HANDLING ---
+    - name: Compress HTML report (if exists)
+      if: steps.jmeter-run.outcome == 'success' && files('jmeter-results/html-report/index.html')
+      run: |
+        cd jmeter-results
+        zip -r report.zip html-report/
+
+    - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: jmeter-test-report
+        name: jmeter-results
         path: |
           jmeter-results/results.jtl
-          jmeter-results/jmeter-html-report.zip
+          jmeter-results/report.zip
+        if-no-files-found: error
