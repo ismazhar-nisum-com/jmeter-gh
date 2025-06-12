@@ -22,8 +22,17 @@ jobs:
     - name: Download Apache JMeter
       run: |
         wget https://dlcdn.apache.org/jmeter/binaries/apache-jmeter-5.6.3.tgz
-          tar -xzf apache-jmeter-5.6.3.tgz
-          echo "JMETER_HOME=$PWD/apache-jmeter-5.6.3" >> $GITHUB_ENV
+        tar -xzf apache-jmeter-5.6.3.tgz
+        echo "JMETER_HOME=$PWD/apache-jmeter-5.6.3" >> $GITHUB_ENV
+
+    - name: Set Report Directory Env Variable
+      run: echo "REPORT_DIR=jmeter-results/html-report" >> $GITHUB_ENV
+
+    - name: Create Results Directory
+      run: mkdir -p jmeter-results
+
+    - name: Verify JMX File Exists
+      run: test -f jmeter/test.jmx || { echo "❌ test.jmx not found!"; exit 1; }
 
     - name: Run JMeter and output log
       run: |
@@ -31,14 +40,15 @@ jobs:
           -l jmeter-results/results.jtl \
           -j jmeter-results/jmeter.log \
           -e -o "$REPORT_DIR"
-    - name: Show JMeter Execution Log
-      run: cat jmeter-results/jmeter.log
 
+    - name: Show JMeter Execution Log
+      if: always()
+      run: cat jmeter-results/jmeter.log
 
     - name: Check Report Directory Exists
       run: |
         echo "REPORT_DIR=$REPORT_DIR"
-        ls -lah "$REPORT_DIR" || echo "Directory $REPORT_DIR does not exist!"
+        ls -lah "$REPORT_DIR" || echo "⚠️ Directory $REPORT_DIR does not exist!"
 
     - name: Zip HTML Report if Exists
       if: success()
@@ -51,7 +61,6 @@ jobs:
           echo "Report directory not generated. Skipping zip." > jmeter-results/NO_REPORT.txt
         fi
 
-
     - name: Upload Artifacts (JTL + HTML Report ZIP)
       uses: actions/upload-artifact@v4
       with:
@@ -59,3 +68,4 @@ jobs:
         path: |
           jmeter-results/results.jtl
           jmeter-results/jmeter-html-report.zip
+          jmeter-results/NO_REPORT.txt
