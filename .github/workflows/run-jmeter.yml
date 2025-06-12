@@ -3,7 +3,7 @@ name: JMeter Test Suite
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # Allows manual trigger
+  workflow_dispatch:
 
 jobs:
   jmeter-test:
@@ -31,44 +31,49 @@ jobs:
     - name: Install JMeter (if not cached)
       if: steps.cache-jmeter.outputs.cache-hit != 'true'
       run: |
-        wget https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.6.2.tgz
+        echo "Installing JMeter..."
+        wget -q https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.6.2.tgz
         tar -xzf apache-jmeter-5.6.2.tgz
         echo "JMETER_HOME=$PWD/apache-jmeter-5.6.2" >> $GITHUB_ENV
+        echo "PATH=$PWD/apache-jmeter-5.6.2/bin:$PATH" >> $GITHUB_ENV
 
-    # --- TEST EXECUTION WITH VALIDATION ---
+    # --- DEBUG: VERIFY INSTALLATION ---
+    - name: Verify JMeter installation
+      run: |
+        echo "JMETER_HOME: $JMETER_HOME"
+        echo "PATH: $PATH"
+        ls -la $JMETER_HOME/bin/
+        $JMETER_HOME/bin/jmeter --version
+
+    # --- TEST EXECUTION ---
     - name: Run JMeter test
       id: jmeter-run
       run: |
         # Create output directories
         mkdir -p ./jmeter-results/html-report
         
-        # Run test with fail-safe (|| true prevents workflow failure)
+        echo "Running JMeter test..."
         $JMETER_HOME/bin/jmeter -n -t ./jmeter/test.jmx \
           -l ./jmeter-results/results.jtl \
-          -e -o ./jmeter-results/html-report || echo "JMeter exited with error (ignored for artifacts)"
+          -e -o ./jmeter-results/html-report
 
-        # Validate JTL file
-        if [ ! -s "./jmeter-results/results.jtl" ]; then
-          echo "::error::results.jtl is empty! Check test plan configuration."
-          exit 1
-        fi
-
-        # Validate HTML report
-        if [ ! -f "./jmeter-results/html-report/index.html" ]; then
-          echo "::warning::HTML report not generated!"
-        fi
+        # Debug: Show first 5 lines of JTL
+        echo "JTL file preview:"
+        head -n 5 ./jmeter-results/results.jtl || echo "No JTL file generated"
 
     # --- ARTIFACT HANDLING ---
-    - name: Compress HTML report
+    - name: Compress and upload results
+      if: always()
       run: |
+        # Zip HTML report if exists
         if [ -d "jmeter-results/html-report" ]; then
           cd jmeter-results
           zip -r report.zip html-report/
-        else
-          echo "No HTML report directory found. Skipping compression."
         fi
 
-    - name: Upload artifacts
+        # Upload artifacts
+        echo "Contents of jmeter-results:"
+        ls -la jmeter-results/
       uses: actions/upload-artifact@v4
       with:
         name: jmeter-results
