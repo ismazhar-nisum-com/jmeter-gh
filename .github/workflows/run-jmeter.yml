@@ -30,7 +30,7 @@ jobs:
         $JMETER_HOME/bin/jmeter -n -t ./jmeter/test.jmx -l result.jtl
 
     - name: Upload JMeter Results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: jmeter-results
         path: result.jtl
