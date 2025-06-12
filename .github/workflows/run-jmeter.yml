@@ -17,8 +17,8 @@ jobs:
     - name: Set up Java 17
       uses: actions/setup-java@v3
       with:
-        distribution: 'temurin'   # ✅ Required now
-        java-version: '17'        # ✅ Match your local version
+        distribution: 'temurin'
+        java-version: '17'
 
     - name: Download Apache JMeter
       run: |
@@ -31,17 +31,15 @@ jobs:
         mkdir -p jmeter-results
         $JMETER_HOME/bin/jmeter -n -t ./jmeter/test.jmx -l jmeter-results/results.jtl -e -o jmeter-results/html-report
 
-
     - name: Zip HTML Report
-  	run: |
-  	cd jmeter-results
-   	zip -r jmeter-html-report.zip html-report
+      run: |
+        cd jmeter-results
+        zip -r jmeter-html-report.zip html-report
 
-    - name: Upload JMeter Results (JTL + HTML Report)
+    - name: Upload JMeter Results (JTL + HTML Report ZIP)
       uses: actions/upload-artifact@v4
       with:
         name: jmeter-test-report
         path: |
           jmeter-results/results.jtl
-          jmeter-results/html-report/
-
+          jmeter-results/jmeter-html-report.zip
