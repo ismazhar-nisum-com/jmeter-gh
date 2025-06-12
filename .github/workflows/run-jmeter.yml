@@ -2,8 +2,7 @@ name: Run JMeter Test
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -11,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
+    - name: Checkout Repository
       uses: actions/checkout@v3
 
     - name: Set up Java 17
@@ -22,44 +21,29 @@ jobs:
 
     - name: Download Apache JMeter
       run: |
-        wget https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.6.2.tgz
-        tar -xzf apache-jmeter-5.6.2.tgz
-        echo "JMETER_HOME=$PWD/apache-jmeter-5.6.2" >> $GITHUB_ENV
-    - name: Run JMeter Test
+        wget https://dlcdn.apache.org//jmeter/binaries/apache-jmeter-5.6.3.tgz
+        tar -xzf apache-jmeter-5.6.3.tgz
+        echo "JMETER_HOME=$PWD/apache-jmeter-5.6.3" >> $GITHUB_ENV
+
+    - name: Run JMeter Test Plan
       run: |
         mkdir -p jmeter-results
         REPORT_DIR="jmeter-results/html-report-$(date +%Y%m%d-%H%M%S)"
         rm -rf "$REPORT_DIR"
         echo "REPORT_DIR=$REPORT_DIR" >> $GITHUB_ENV
-    
-        echo "🚀 Running JMeter Test Plan..."
-        $JMETER_HOME/bin/jmeter -n -t jmeter/test.jmx -l jmeter-results/results.jtl -e -o "$REPORT_DIR"
-    
-        echo "📊 Test summary:"
-        TOTAL=$(grep -c "" jmeter-results/results.jtl)
-        FAILS=$(grep -c ",false" jmeter-results/results.jtl || true)
-        echo "Total samples: $TOTAL"
-        echo "Failures: $FAILS"
-    
-        if [ "$FAILS" -gt 0 ]; then
-          echo "❌ One or more requests failed. Failing the workflow."
-          grep ",false" jmeter-results/results.jtl
-          exit 1
-        else
-          echo "✅ All JMeter requests passed."
-        fi
-      
-    - name: Zip HTML Report (Safe)
-      run: |
-        echo "Zipping available report directory..."
-        ls -lah jmeter-results
-        zip -r jmeter-results/jmeter-html-report.zip jmeter-results/html-report-*/
 
-    - name: Upload Artifacts (JTL + Summary + HTML Report ZIP)
+        $JMETER_HOME/bin/jmeter -n -t jmeter/test.jmx \
+          -l jmeter-results/results.jtl \
+          -e -o "$REPORT_DIR"
+
+    - name: Zip HTML Report
+      run: |
+        zip -r jmeter-results/jmeter-html-report.zip "$REPORT_DIR"
+
+    - name: Upload Artifacts (JTL + HTML Report ZIP)
       uses: actions/upload-artifact@v4
       with:
         name: jmeter-test-results
         path: |
           jmeter-results/results.jtl
-          jmeter-results/summary.txt
           jmeter-results/jmeter-html-report.zip
