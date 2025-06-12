@@ -32,7 +32,7 @@ jobs:
         REPORT_DIR="jmeter-results/html-report-$(date +%Y%m%d-%H%M%S)"
         rm -rf "$REPORT_DIR" # ✅ Ensure the folder does not exist
         echo "REPORT_DIR=$REPORT_DIR" >> $GITHUB_ENV
-        $JMETER_HOME/bin/jmeter -n -t Jenkins_Testplan.jmx -l jmeter-results/results.jtl -e -o "$REPORT_DIR"
+        $JMETER_HOME/bin/jmeter -n -t test.jmx -l jmeter-results/results.jtl -e -o "$REPORT_DIR"
     
 
     - name: Upload Artifacts (JTL + Summary + HTML Report ZIP)
